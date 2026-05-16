@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
+import { LogoMark } from "@/components/logo-mark";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,10 +14,26 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const description =
+  "Share a link. Collect questions. See who agrees. Not anonymous, no accounts.";
+
 export const metadata: Metadata = {
-  title: "CrowdSurvey",
-  description:
-    "Share a link, collect questions, see who agrees. Lightweight and not anonymous.",
+  title: {
+    default: "CrowdSurvey",
+    template: "%s · CrowdSurvey",
+  },
+  description,
+  openGraph: {
+    title: "CrowdSurvey",
+    description,
+    type: "website",
+    siteName: "CrowdSurvey",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "CrowdSurvey",
+    description,
+  },
 };
 
 export default function RootLayout({
@@ -32,8 +49,12 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-[var(--background)] text-[var(--foreground)]">
         <header className="border-b border-black/10 dark:border-white/10">
           <div className="mx-auto max-w-2xl px-4 py-3 flex items-center justify-between">
-            <Link href="/" className="font-semibold tracking-tight">
-              CrowdSurvey
+            <Link
+              href="/"
+              className="font-semibold tracking-tight flex items-center gap-2"
+            >
+              <LogoMark size={24} />
+              <span>CrowdSurvey</span>
             </Link>
             <nav className="text-sm flex gap-4">
               <Link
