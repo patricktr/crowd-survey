@@ -4,6 +4,7 @@ import { useCallback, useMemo, useSyncExternalStore } from "react";
 
 const NAME_KEY = "crowdsurvey:name";
 const ADMIN_KEY = "crowdsurvey:admin";
+const SUPER_KEY = "crowdsurvey:super";
 const STORAGE_EVENT = "crowdsurvey:storage";
 
 export type AdminBoardEntry = {
@@ -142,4 +143,54 @@ function readBoards(): AdminBoardEntry[] {
 
 export function readAdminTokenFor(boardId: string): string | null {
   return readBoards().find((b) => b.boardId === boardId)?.adminToken ?? null;
+}
+
+export function readSuperToken(): string | null {
+  const raw = readRaw(SUPER_KEY);
+  if (raw == null) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return typeof parsed === "string" && parsed.length > 0 ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function readAnyAdminTokenFor(boardId: string): string | null {
+  return readAdminTokenFor(boardId) ?? readSuperToken();
+}
+
+export function useSuperToken(): {
+  token: string | null;
+  hydrated: boolean;
+  setToken: (t: string) => void;
+  clearToken: () => void;
+} {
+  const raw = useRawLocalStorage(SUPER_KEY);
+  const token = useMemo<string | null>(() => {
+    if (raw == null) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      return typeof parsed === "string" && parsed.length > 0 ? parsed : null;
+    } catch {
+      return null;
+    }
+  }, [raw]);
+
+  const setToken = useCallback((t: string) => {
+    const cleaned = t.trim();
+    if (!cleaned) return;
+    writeRaw(SUPER_KEY, JSON.stringify(cleaned));
+  }, []);
+
+  const clearToken = useCallback(() => {
+    writeRaw(SUPER_KEY, null);
+  }, []);
+
+  return {
+    token,
+    hydrated: typeof window !== "undefined",
+    setToken,
+    clearToken,
+  };
 }

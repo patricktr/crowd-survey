@@ -8,10 +8,12 @@ import { useAdminBoards } from "@/lib/client-store";
 export function AdminControls({
   board,
   adminToken,
+  isOwnBoard,
   onChange,
 }: {
   board: Board;
   adminToken: string;
+  isOwnBoard: boolean;
   onChange: (next: Partial<Board>) => void;
 }) {
   const router = useRouter();
@@ -43,12 +45,14 @@ export function AdminControls({
       }
       const updated: Board = await res.json();
       onChange(updated);
-      admin.add({
-        boardId: board.id,
-        title: updated.title,
-        adminToken,
-        createdAt: board.createdAt,
-      });
+      if (isOwnBoard) {
+        admin.add({
+          boardId: board.id,
+          title: updated.title,
+          adminToken,
+          createdAt: board.createdAt,
+        });
+      }
       setEditing(false);
     } catch (err) {
       setError((err as Error).message);
@@ -94,8 +98,8 @@ export function AdminControls({
         headers: { "x-admin-token": adminToken },
       });
       if (!res.ok && res.status !== 204) throw new Error("Delete failed");
-      admin.remove(board.id);
-      router.push("/admin");
+      if (isOwnBoard) admin.remove(board.id);
+      router.push(isOwnBoard ? "/admin" : "/");
     } catch (err) {
       setError((err as Error).message);
       setBusy(false);
@@ -130,7 +134,9 @@ export function AdminControls({
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-xs uppercase tracking-wide text-[var(--muted)]">
-          You created this board
+          {isOwnBoard
+            ? "You created this board"
+            : "Superadmin access"}
         </span>
         <div className="flex flex-wrap gap-2">
           <button

@@ -1,3 +1,4 @@
+import { constantTimeEqual } from "./crypto";
 import { sql } from "./db";
 import { newAdminToken, newBoardId } from "./ids";
 
@@ -75,17 +76,14 @@ export async function verifyAdmin(
   id: string,
   token: string
 ): Promise<boolean> {
+  const superToken = process.env.SUPERADMIN_TOKEN;
+  if (superToken && constantTimeEqual(superToken, token)) return true;
+
   const rows = await sql<{ admin_token: string }[]>`
     SELECT admin_token FROM boards WHERE id = ${id}
   `;
   if (rows.length === 0) return false;
-  const stored = rows[0].admin_token;
-  if (stored.length !== token.length) return false;
-  let mismatch = 0;
-  for (let i = 0; i < stored.length; i++) {
-    mismatch |= stored.charCodeAt(i) ^ token.charCodeAt(i);
-  }
-  return mismatch === 0;
+  return constantTimeEqual(rows[0].admin_token, token);
 }
 
 export async function updateBoard(

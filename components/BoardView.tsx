@@ -3,9 +3,10 @@
 import { useCallback, useState } from "react";
 import type { Board, QuestionWithAgreements } from "@/lib/queries";
 import {
-  readAdminTokenFor,
+  readAnyAdminTokenFor,
   useAdminBoards,
   useStoredName,
+  useSuperToken,
 } from "@/lib/client-store";
 import { useActivePolling } from "@/lib/use-active-polling";
 import { AdminControls } from "./AdminControls";
@@ -21,12 +22,15 @@ type BoardPayload = {
 export function BoardView({ initial }: { initial: BoardPayload }) {
   const { name, setName } = useStoredName();
   const adminStore = useAdminBoards();
-  const adminToken = adminStore.tokenFor(initial.board.id);
+  const { token: superToken } = useSuperToken();
+  const ownToken = adminStore.tokenFor(initial.board.id);
+  const adminToken = ownToken ?? superToken;
+  const isOwnBoard = ownToken !== null;
 
   const fetcher = useCallback(
     async (signal: AbortSignal): Promise<BoardPayload> => {
       const headers: Record<string, string> = {};
-      const token = readAdminTokenFor(initial.board.id);
+      const token = readAnyAdminTokenFor(initial.board.id);
       if (token) headers["x-admin-token"] = token;
       const res = await fetch(`/api/boards/${initial.board.id}`, {
         headers,
@@ -153,10 +157,10 @@ export function BoardView({ initial }: { initial: BoardPayload }) {
         <AdminControls
           board={board}
           adminToken={adminToken}
+          isOwnBoard={isOwnBoard}
           onChange={(next) => {
-            // optimistic local merge; next poll confirms
             void refresh();
-            if (next.title !== undefined) {
+            if (isOwnBoard && next.title !== undefined) {
               adminStore.add({
                 boardId: board.id,
                 title: next.title,

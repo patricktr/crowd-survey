@@ -14,6 +14,16 @@ export default function AdminPage() {
           Boards you created from this browser. Admin tokens live in
           localStorage — if you clear your browser data, you lose admin access.
         </p>
+        <p className="text-xs text-[var(--muted)]">
+          Have the server&apos;s superadmin token? Configure it on the{" "}
+          <Link
+            href="/super"
+            className="underline underline-offset-2"
+          >
+            superadmin page
+          </Link>{" "}
+          to admin any board.
+        </p>
       </div>
 
       {!hydrated ? (
