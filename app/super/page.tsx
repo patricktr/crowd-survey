@@ -1,8 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSuperToken } from "@/lib/client-store";
+import type { BoardOverview, PersonOverview } from "@/lib/queries";
+
+type Overview = { boards: BoardOverview[]; people: PersonOverview[] };
 
 export default function SuperAdminPage() {
   const { token, setToken, clearToken } = useSuperToken();
@@ -126,6 +129,8 @@ export default function SuperAdminPage() {
         </form>
       </div>
 
+      {token && <SuperOverview token={token} />}
+
       <p className="text-xs text-[var(--muted)]">
         Back to{" "}
         <Link href="/" className="underline underline-offset-2">
@@ -136,6 +141,168 @@ export default function SuperAdminPage() {
           your boards
         </Link>
       </p>
+    </div>
+  );
+}
+
+function SuperOverview({ token }: { token: string }) {
+  const [data, setData] = useState<Overview | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/superadmin/overview", {
+      headers: { "x-admin-token": token },
+      cache: "no-store",
+    })
+      .then(async (res) => {
+        if (cancelled) return;
+        if (res.status === 401) {
+          setError("Token rejected. Try replacing it above.");
+          setData(null);
+          return;
+        }
+        if (!res.ok) {
+          setError("Failed to load overview.");
+          return;
+        }
+        setError(null);
+        setData(await res.json());
+      })
+      .catch(() => {
+        if (!cancelled) setError("Failed to load overview.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, tick]);
+
+  function refresh() {
+    setLoading(true);
+    setTick((t) => t + 1);
+  }
+
+  if (loading) {
+    return (
+      <p className="text-sm text-[var(--muted)]">Loading overview…</p>
+    );
+  }
+  if (error) {
+    return (
+      <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+        {error}
+      </p>
+    );
+  }
+  if (!data) return null;
+
+  return (
+    <div className="space-y-6">
+      <section>
+        <div className="flex items-baseline justify-between mb-2">
+          <h2 className="text-base font-semibold">
+            Boards{" "}
+            <span className="text-[var(--muted)] font-normal text-sm">
+              ({data.boards.length})
+            </span>
+          </h2>
+          <button
+            type="button"
+            onClick={refresh}
+            className="text-xs text-[var(--muted)] hover:underline"
+          >
+            Refresh
+          </button>
+        </div>
+        {data.boards.length === 0 ? (
+          <p className="text-sm text-[var(--muted)] italic">No boards yet.</p>
+        ) : (
+          <ul className="space-y-2">
+            {data.boards.map((b) => (
+              <li
+                key={b.id}
+                className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <Link
+                      href={`/b/${b.id}`}
+                      className="font-medium hover:underline underline-offset-2 truncate block"
+                    >
+                      {b.title}
+                    </Link>
+                    {b.description && (
+                      <p className="text-xs text-[var(--muted)] line-clamp-2 mt-0.5">
+                        {b.description}
+                      </p>
+                    )}
+                  </div>
+                  {b.closed && (
+                    <span className="rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 px-2 py-0.5 text-xs whitespace-nowrap">
+                      Closed
+                    </span>
+                  )}
+                </div>
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--muted)]">
+                  <span>/b/{b.id}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>
+                    {b.questionCount}{" "}
+                    {b.questionCount === 1 ? "question" : "questions"}
+                  </span>
+                  <span aria-hidden="true">·</span>
+                  <span>
+                    {b.agreementCount}{" "}
+                    {b.agreementCount === 1 ? "agreement" : "agreements"}
+                  </span>
+                  <span aria-hidden="true">·</span>
+                  <span title={b.lastActivity}>
+                    last activity{" "}
+                    {new Date(b.lastActivity).toLocaleString()}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section>
+        <h2 className="text-base font-semibold mb-2">
+          People{" "}
+          <span className="text-[var(--muted)] font-normal text-sm">
+            ({data.people.length})
+          </span>
+        </h2>
+        {data.people.length === 0 ? (
+          <p className="text-sm text-[var(--muted)] italic">
+            Nobody has posted or agreed yet.
+          </p>
+        ) : (
+          <ul className="divide-y divide-[var(--border)] rounded-md border border-[var(--border)] bg-[var(--surface)]">
+            {data.people.map((p) => (
+              <li
+                key={p.name.toLowerCase()}
+                className="px-3 py-2 flex items-center justify-between gap-2 text-sm"
+              >
+                <span className="font-medium truncate">{p.name}</span>
+                <span className="text-xs text-[var(--muted)] whitespace-nowrap">
+                  {p.questionCount}{" "}
+                  {p.questionCount === 1 ? "question" : "questions"}
+                  {" · "}
+                  {p.agreementCount}{" "}
+                  {p.agreementCount === 1 ? "agreement" : "agreements"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }

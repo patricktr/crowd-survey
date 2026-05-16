@@ -72,18 +72,133 @@ export async function getBoard(id: string): Promise<Board | null> {
   };
 }
 
+export function isSuperadmin(token: string | null): boolean {
+  if (!token) return false;
+  const expected = process.env.SUPERADMIN_TOKEN;
+  if (!expected) return false;
+  return constantTimeEqual(expected, token);
+}
+
 export async function verifyAdmin(
   id: string,
   token: string
 ): Promise<boolean> {
-  const superToken = process.env.SUPERADMIN_TOKEN;
-  if (superToken && constantTimeEqual(superToken, token)) return true;
+  if (isSuperadmin(token)) return true;
 
   const rows = await sql<{ admin_token: string }[]>`
     SELECT admin_token FROM boards WHERE id = ${id}
   `;
   if (rows.length === 0) return false;
   return constantTimeEqual(rows[0].admin_token, token);
+}
+
+export type BoardOverview = {
+  id: string;
+  title: string;
+  description: string | null;
+  closed: boolean;
+  createdAt: string;
+  questionCount: number;
+  agreementCount: number;
+  lastActivity: string;
+};
+
+export async function listAllBoardsWithStats(): Promise<BoardOverview[]> {
+  const rows = await sql<
+    {
+      id: string;
+      title: string;
+      description: string | null;
+      closed: boolean;
+      created_at: Date;
+      question_count: number;
+      agreement_count: number;
+      last_activity: Date;
+    }[]
+  >`
+    SELECT
+      b.id,
+      b.title,
+      b.description,
+      b.closed,
+      b.created_at,
+      COALESCE(s.question_count, 0)::int   AS question_count,
+      COALESCE(s.agreement_count, 0)::int  AS agreement_count,
+      COALESCE(s.last_activity, b.created_at) AS last_activity
+    FROM boards b
+    LEFT JOIN LATERAL (
+      SELECT
+        COUNT(DISTINCT q.id)::int                            AS question_count,
+        COUNT(a.question_id)::int                            AS agreement_count,
+        GREATEST(MAX(q.created_at), MAX(a.created_at))       AS last_activity
+      FROM questions q
+      LEFT JOIN agreements a ON a.question_id = q.id
+      WHERE q.board_id = b.id
+    ) s ON true
+    ORDER BY last_activity DESC NULLS LAST, b.created_at DESC
+  `;
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    description: r.description,
+    closed: r.closed,
+    createdAt: r.created_at.toISOString(),
+    questionCount: r.question_count,
+    agreementCount: r.agreement_count,
+    lastActivity: r.last_activity.toISOString(),
+  }));
+}
+
+export type PersonOverview = {
+  name: string;
+  questionCount: number;
+  agreementCount: number;
+  lastSeen: string;
+};
+
+export async function listAllPeopleWithStats(): Promise<PersonOverview[]> {
+  const rows = await sql<
+    {
+      name: string;
+      question_count: number;
+      agreement_count: number;
+      last_seen: Date;
+    }[]
+  >`
+    WITH names AS (
+      SELECT LOWER(author_name) AS key, author_name AS variant, created_at FROM questions
+      UNION ALL
+      SELECT LOWER(name),         name,         created_at FROM agreements
+    ),
+    display AS (
+      SELECT DISTINCT ON (key) key, variant, created_at
+      FROM names
+      ORDER BY key, created_at DESC
+    ),
+    q_counts AS (
+      SELECT LOWER(author_name) AS key, COUNT(*)::int AS n, MAX(created_at) AS last_at
+      FROM questions GROUP BY 1
+    ),
+    a_counts AS (
+      SELECT LOWER(name) AS key, COUNT(*)::int AS n, MAX(created_at) AS last_at
+      FROM agreements GROUP BY 1
+    )
+    SELECT
+      d.variant AS name,
+      COALESCE(q.n, 0)::int AS question_count,
+      COALESCE(a.n, 0)::int AS agreement_count,
+      GREATEST(COALESCE(q.last_at, d.created_at), COALESCE(a.last_at, d.created_at)) AS last_seen
+    FROM display d
+    LEFT JOIN q_counts q ON q.key = d.key
+    LEFT JOIN a_counts a ON a.key = d.key
+    ORDER BY last_seen DESC, d.variant
+  `;
+  return rows.map((r) => ({
+    name: r.name,
+    questionCount: r.question_count,
+    agreementCount: r.agreement_count,
+    lastSeen: r.last_seen.toISOString(),
+  }));
 }
 
 export async function updateBoard(
