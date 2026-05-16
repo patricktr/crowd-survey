@@ -270,6 +270,7 @@ export function BoardView({ initial }: { initial: BoardPayload }) {
                 myName={name}
                 isAdmin={isAdmin}
                 closed={board.closed}
+                requestName={withName}
                 onAgreeChange={() => void refresh()}
                 onDelete={() => void deleteQuestion(q.id)}
               />

@@ -8,6 +8,7 @@ type Props = {
   myName: string | null;
   isAdmin: boolean;
   closed: boolean;
+  requestName: (then: (name: string) => void | Promise<void>) => void;
   onAgreeChange: (next: { agreed: boolean }) => void;
   onDelete: () => void;
 };
@@ -17,6 +18,7 @@ export function QuestionItem({
   myName,
   isAdmin,
   closed,
+  requestName,
   onAgreeChange,
   onDelete,
 }: Props) {
@@ -31,14 +33,13 @@ export function QuestionItem({
     question.agreements.some((a) => a.name.toLowerCase() === myNameLower);
   const count = question.agreements.length;
 
-  async function toggleAgree() {
-    if (!myName || iAuthored || closed) return;
+  async function performToggle(name: string, currentlyAgreed: boolean) {
     setBusy(true);
     setError(null);
     try {
-      if (iAgreed) {
+      if (currentlyAgreed) {
         const url = `/api/questions/${question.id}/agreements?name=${encodeURIComponent(
-          myName
+          name
         )}`;
         const res = await fetch(url, { method: "DELETE" });
         if (!res.ok && res.status !== 204) {
@@ -49,7 +50,7 @@ export function QuestionItem({
         const res = await fetch(`/api/questions/${question.id}/agreements`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: myName }),
+          body: JSON.stringify({ name }),
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -62,6 +63,25 @@ export function QuestionItem({
     } finally {
       setBusy(false);
     }
+  }
+
+  function toggleAgree() {
+    if (closed) return;
+    if (myName) {
+      if (iAuthored) return;
+      void performToggle(myName, iAgreed);
+      return;
+    }
+    requestName((name) => {
+      if (name.toLowerCase() === question.authorName.toLowerCase()) {
+        setError("That's the same name as the author — pick a different name to agree.");
+        return;
+      }
+      const alreadyAgreed = question.agreements.some(
+        (a) => a.name.toLowerCase() === name.toLowerCase()
+      );
+      return performToggle(name, alreadyAgreed);
+    });
   }
 
   return (
@@ -109,9 +129,11 @@ export function QuestionItem({
               ? "You wrote this one"
               : closed
                 ? "Board is closed"
-                : iAgreed
-                  ? "Click to remove your agreement"
-                  : "Agree with this"
+                : myName
+                  ? iAgreed
+                    ? "Click to remove your agreement"
+                    : "Agree with this"
+                  : "Click to add your name"
           }
           className={
             iAgreed
